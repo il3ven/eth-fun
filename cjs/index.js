@@ -64,6 +64,7 @@ __export(exports, {
 });
 
 // src/transport.js
+var import_async_retry = __toModule(require("async-retry"));
 var import_cross_fetch = __toModule(require("cross-fetch"));
 
 // src/errors.js
@@ -88,44 +89,55 @@ var ValueError = class extends Error {
 
 // src/transport.js
 async function send(options, body) {
-  let headers = Object.assign({}, { "Content-Type": "application/json" });
-  if (options && options.headers) {
-    headers = Object.assign(headers, options.headers);
-  }
-  let url;
-  if (!options.url) {
-    throw new Error("`url` is a required property of `options`");
-  } else {
-    url = options.url;
-  }
-  const res = await (0, import_cross_fetch.default)(url, {
-    method: "POST",
-    headers,
-    signal: options.signal,
-    body: JSON.stringify(body)
-  });
-  if (res.status === 403) {
-    const answer = await res.text();
-    if (answer.includes("invalid host specified")) {
-      throw new RPCError(`Status: 403 Forbidden; Ethereum node answered with: "${answer}".`);
-    } else {
-      throw new Error("Unexpected error. Please report on eth-fun repository.");
+  return (0, import_async_retry.default)(async (bail) => {
+    let headers = Object.assign({}, { "Content-Type": "application/json" });
+    if (options && options.headers) {
+      headers = Object.assign(headers, options.headers);
     }
-  }
-  if (res.status >= 500) {
-    throw new RPCError(`RPC endpoint sent status: "${res.status}"`);
-  }
-  const result = await res.text();
-  let data;
-  try {
-    data = JSON.parse(result);
-  } catch (err) {
-    throw new RPCError(`Encountered error when trying to parse JSON body result: "${result}", error: "${err.toString()}"`);
-  }
-  if (data.error && data.error.message) {
-    throw new RPCError(`Error from fullnode: ${data.error.message}`);
-  }
-  return data.result;
+    let url;
+    if (!options.url) {
+      bail(new Error("`url` is a required property of `options`"));
+      return;
+    } else {
+      url = options.url;
+    }
+    const res = await (0, import_cross_fetch.default)(url, {
+      method: "POST",
+      headers,
+      signal: options.signal,
+      body: JSON.stringify(body)
+    });
+    if (res.status === 429) {
+      throw new Error("Received status code 429");
+    }
+    if (res.status === 403) {
+      const answer = await res.text();
+      if (answer.includes("invalid host specified")) {
+        bail(new RPCError(`Status: 403 Forbidden; Ethereum node answered with: "${answer}".`));
+        return;
+      } else {
+        bail(new Error("Unexpected error. Please report on eth-fun repository."));
+        return;
+      }
+    }
+    if (res.status >= 500) {
+      bail(new RPCError(`RPC endpoint sent status: "${res.status}"`));
+      return;
+    }
+    const result = await res.text();
+    let data;
+    try {
+      data = JSON.parse(result);
+    } catch (err) {
+      bail(new RPCError(`Encountered error when trying to parse JSON body result: "${result}", error: "${err.toString()}"`));
+      return;
+    }
+    if (data.error && data.error.message) {
+      bail(new RPCError(`Error from fullnode: ${data.error.message}`));
+      return;
+    }
+    return data.result;
+  }, options?.retry ?? { retries: 0 });
 }
 
 // src/constants.js

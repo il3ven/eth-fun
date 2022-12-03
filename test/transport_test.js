@@ -6,6 +6,7 @@ import AbortController from "abort-controller";
 
 import { send } from "../src/transport.js";
 import { RPCError } from "../src/errors.js";
+import { Response } from "cross-fetch";
 
 test.serial(
   "if usable error message is logged when body isn't JSON parsable",
@@ -111,6 +112,82 @@ test.serial("if RPCError is thrown on a 403 error from the node", async (t) => {
   await t.throwsAsync(async () => await mockSend(options, body), {
     message:
       'Status: 403 Forbidden; Ethereum node answered with: "invalid host specified".',
+  });
+});
+
+test.serial("should retry on a 429 error from the node", async (t) => {
+  const retries = 1;
+  const body = { hello: "world" };
+
+  const options = {
+    url: "https://test6.com",
+    headers: { Authorization: "Bearer bear" },
+    retry: { retries },
+  };
+
+  let requestCount = 0;
+  fetchMock.post(options.url, (url, opts) =>
+    ++requestCount < retries + 1
+      ? { body: { result: requestCount }, status: 429 }
+      : { body: { result: requestCount }, status: 200 }
+  );
+  const sandbox = fetchMock.sandbox();
+  const { send: mockSend } = await esmock("../src/transport.js", null, {
+    "cross-fetch": { default: sandbox },
+  });
+
+  const res = await mockSend(options, body);
+  t.is(res, retries + 1);
+});
+
+test.serial("should retry on network error", async (t) => {
+  const retries = 1;
+  const body = { hello: "world" };
+
+  const options = {
+    url: "https://test2.com",
+    headers: { Authorization: "Bearer bear" },
+    retry: { retries },
+  };
+
+  let requestCount = 0;
+  const { send: mockSend } = await esmock("../src/transport.js", null, {
+    "cross-fetch": {
+      default: () => {
+        if (++requestCount < retries + 1) throw new Error("NetworkError");
+        return new Response(JSON.stringify({ result: requestCount }));
+      },
+    },
+  });
+
+  const res = await mockSend(options, body);
+  t.is(res, retries + 1);
+});
+
+test.serial("should not retry on non 429 error", async (t) => {
+  const body = { hello: "world" };
+
+  const options = {
+    url: "https://test5.com",
+    headers: { Authorization: "Bearer bear" },
+    retry: { retries: 1 },
+  };
+
+  const retries = 1;
+  let requestCount = 0;
+  fetchMock.post(options.url, (url, opts) =>
+    ++requestCount < retries + 1
+      ? { body: { result: requestCount }, status: 501 }
+      : { body: { result: requestCount }, status: 200 }
+  );
+  const sandbox = fetchMock.sandbox();
+  const { send: mockSend } = await esmock("../src/transport.js", null, {
+    "cross-fetch": { default: sandbox },
+  });
+
+  await t.throwsAsync(async () => {
+    await mockSend(options, body);
+    t.is(requestCount, 1);
   });
 });
 

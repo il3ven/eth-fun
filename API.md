@@ -35,6 +35,20 @@ properties:
 | url                                                                               | yes       | `undefined`                            |
 | headers                                                                           | no        | `{"Content-Type": "application/json"}` |
 | [signal](https://developer.mozilla.org/en-US/docs/Web/API/AbortController/signal) | no        | `undefined`                            |
+| retry                                                                             | no        | no retry                               |
+
+```js
+const options = {
+  url: 'https://cloudflare-eth.com',
+  headers: {
+    Authorization: 'Bearer <token>'
+  },
+  signal: new AbortController().signal,
+  retry: {
+    retries: 5
+  }
+}
+```
 
 ### `web3-eth-abi` functions
 
