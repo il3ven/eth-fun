@@ -30,12 +30,12 @@ Table of contents:
 `options` are passed to any JSON-RPC call. They may contain the following
 properties:
 
-| name                                                                              | required? | default                                |
-| --------------------------------------------------------------------------------- | --------- | -------------------------------------- |
-| url                                                                               | yes       | `undefined`                            |
-| headers                                                                           | no        | `{"Content-Type": "application/json"}` |
-| [signal](https://developer.mozilla.org/en-US/docs/Web/API/AbortController/signal) | no        | `undefined`                            |
-| retry                                                                             | no        | no retry                               |
+| name    | required? | default                                |
+| ------- | --------- | -------------------------------------- |
+| url     | yes       | `undefined`                            |
+| headers | no        | `{"Content-Type": "application/json"}` |
+| timeout | no        | `undefined`                            |
+| retry   | no        | no retry                               |
 
 ```js
 const options = {
@@ -43,7 +43,7 @@ const options = {
   headers: {
     Authorization: 'Bearer <token>'
   },
-  signal: new AbortController().signal,
+  timeout: 60_000, // 60 seconds
   retry: {
     retries: 5
   }
