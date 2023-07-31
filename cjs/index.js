@@ -88,8 +88,18 @@ var ValueError = class extends Error {
 };
 
 // src/transport.js
+var AbortSignal = {
+  timeout: function(value, url) {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), value);
+    return controller.signal;
+  }
+};
 async function send(options, body) {
-  return (0, import_async_retry.default)(async (bail) => {
+  return (0, import_async_retry.default)(async (bail, attempt) => {
+    if (options.timeout) {
+      options.signal = AbortSignal.timeout(options.timeout, options.url);
+    }
     let headers = Object.assign({}, { "Content-Type": "application/json" });
     if (options && options.headers) {
       headers = Object.assign(headers, options.headers);
@@ -137,7 +147,9 @@ async function send(options, body) {
       return;
     }
     return data.result;
-  }, options?.retry ?? { retries: 0 });
+  }, {
+    retries: options?.retry?.retries
+  });
 }
 
 // src/constants.js
